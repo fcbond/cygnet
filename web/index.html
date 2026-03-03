@@ -268,6 +268,7 @@
 
             return {
                 oc: r.pos,
+                ili: r.ili,
                 d: Object.keys(d).length > 0 ? d : undefined,
                 da,
                 s: Object.keys(s).length > 0 ? s : undefined,
@@ -1555,7 +1556,18 @@
                                                 <p className="text-base">
                                                     <span className="text-gray-600 italic">{getPosName(concept.oc)}.</span>{' '}
                                                     {concept.da ? renderDefinitionWithLinks(mainDef, concept.da) : mainDef}
+                                                    {concept.ili && <span className="text-sm ml-2">⟪{concept.ili}⟫</span>}
                                                 </p>
+                                                {(() => {
+                                                    const enExamples = (concept.s?.en || []).flatMap(sid => loadedSenses[sid.toString()]?.ex || []);
+                                                    return enExamples.length > 0 && (
+                                                        <p className="text-sm italic mt-1">
+                                                            {enExamples.map((ex, ei) => (
+                                                                <span key={ei}>{ei > 0 && '; '}{renderExample(ex)}</span>
+                                                            ))}
+                                                        </p>
+                                                    );
+                                                })()}
                                             </div>
 
                                             {relationsMap && hasRelationsToDisplay && (
