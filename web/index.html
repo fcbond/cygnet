@@ -79,6 +79,13 @@
 
         const remove_accents = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+        // ========== DATABASE URLs ==========
+        // Local dev (localhost): serve from web/ directory via run.sh
+        // Production: fetch from the latest GitHub release assets
+        const DB_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+            ? ''
+            : 'https://github.com/fcbond/cygnet/releases/latest/download/';
+
         // ========== SQL DATABASE LAYER ==========
         let _db = null;
         let _SQL = null;
@@ -459,7 +466,7 @@
                         if (!buf) {
                             // Fetch compressed database
                             setDbProgress('Downloading database...');
-                            const response = await fetch('cygnet.db.gz');
+                            const response = await fetch(DB_BASE + 'cygnet.db.gz');
                             if (!response.ok) throw new Error(`Failed to fetch database: ${response.status}`);
                             const compressedTotal = parseInt(response.headers.get('content-length') || '0');
 
@@ -665,7 +672,7 @@
                     }
 
                     if (!buf) {
-                        const response = await fetch('provenance.db.gz');
+                        const response = await fetch(DB_BASE + 'provenance.db.gz');
                         if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
                         const ds = new DecompressionStream('gzip');
                         const reader = response.body.pipeThrough(ds).getReader();
