@@ -225,6 +225,10 @@ if $DO_BUILD; then
     uv run python conversion_scripts/10_sqlite_conversion.py
     echo
 
+    echo "=== Tests ==="
+    uv run pytest tests/ -v
+    echo
+
     echo "=== Build complete! ==="
     echo "Output:"
     echo "  cygnet.xml        - Full merged resource"
