@@ -457,8 +457,8 @@
             const [collapsedSections, setCollapsedSections] = useState({});
             const [synonymsCollapsed, setSynonymsCollapsed] = useState({});
             const [settingsOpen, setSettingsOpen] = useState(false);
-            const [graphVisible, setGraphVisible] = useState(() =>
-                localStorage.getItem('graphVisible') !== 'false'
+            const [relationsView, setRelationsView] = useState(() =>
+                localStorage.getItem('relationsView') || 'graph'
             );
             const [definitionLanguage, setDefinitionLanguage] = useState(() =>
                 localStorage.getItem('definitionLanguage') || 'en'
@@ -1162,7 +1162,7 @@
 
             // D3 concept graph effect
             useEffect(() => {
-                if (view !== 'concept' || !selectedConcept || !relatedConcepts[selectedConcept]) return;
+                if (view !== 'concept' || !selectedConcept || !relatedConcepts[selectedConcept] || relationsView !== 'graph') return;
 
                 const container = document.getElementById('concept-graph');
                 if (!container) return;
@@ -1418,7 +1418,7 @@
                     if (rafId) cancelAnimationFrame(rafId);
                     if (timeoutId) clearTimeout(timeoutId);
                 };
-            }, [selectedConcept, relatedConcepts, view, visibleNodes, loadedConcepts, graphVisible]);
+            }, [selectedConcept, relatedConcepts, view, visibleNodes, loadedConcepts, relationsView]);
 
             useEffect(() => {
                 return () => {
@@ -1537,12 +1537,16 @@
                                                                 className="cursor-pointer" />
                                                             <span className="text-sm text-gray-600">Show pronunciation</span>
                                                         </label>
-                                                        <label className="flex items-center gap-2 cursor-pointer">
-                                                            <input type="checkbox" checked={graphVisible}
-                                                                onChange={e => { setGraphVisible(e.target.checked); localStorage.setItem('graphVisible', e.target.checked); }}
-                                                                className="cursor-pointer" />
-                                                            <span className="text-sm text-gray-600">Show relations graph</span>
-                                                        </label>
+                                                        <div className="flex items-center gap-2">
+                                                            <label className="text-sm text-gray-600 whitespace-nowrap">Related concepts</label>
+                                                            <select value={relationsView}
+                                                                onChange={e => { setRelationsView(e.target.value); localStorage.setItem('relationsView', e.target.value); }}
+                                                                className="px-2 py-0.5 border border-gray-300 rounded text-sm">
+                                                                <option value="graph">Graph</option>
+                                                                <option value="text">Text</option>
+                                                                <option value="none">Hidden</option>
+                                                            </select>
+                                                        </div>
                                                         <label className="flex items-center gap-2 cursor-pointer">
                                                             <input type="checkbox" checked={showProvenance}
                                                                 onChange={e => {
@@ -1821,14 +1825,37 @@
                                                 })()}
                                             </div>
 
-                                            {relationsMap && hasRelationsToDisplay && (
+                                            {(relationsMap && hasRelationsToDisplay) && (() => {
+                                                // Sense relations: collect from all senses in this concept
+                                                const allSenseIds = concept.s ? Object.values(concept.s).flat().map(s => s.toString()) : [];
+                                                const senseRelsByType = {};
+                                                allSenseIds.forEach(sid => {
+                                                    const sd = loadedSenses[sid];
+                                                    if (!sd?.sr) return;
+                                                    sd.sr.forEach(rel => {
+                                                        const toId = rel.to.toString();
+                                                        if (!loadedSenses[toId]) loadSenseData(toId);
+                                                        if (!senseRelsByType[rel.t]) senseRelsByType[rel.t] = [];
+                                                        senseRelsByType[rel.t].push({ fromLemma: sd.l, toSenseId: toId });
+                                                    });
+                                                });
+                                                const hasSenseRels = Object.keys(senseRelsByType).length > 0;
+
+                                                return (
                                                 <div className="mb-4">
-                                                    <button onClick={() => { const v = !graphVisible; setGraphVisible(v); localStorage.setItem('graphVisible', v); }}
-                                                        className="flex items-center gap-2 font-bold mb-2 text-base hover:text-blue-600 transition-colors">
-                                                        <span>{graphVisible ? '▼' : '▶'}</span>
-                                                        <span>Related Concepts</span>
-                                                    </button>
-                                                    {graphVisible && <div style={{ position: 'relative', overflow: 'hidden' }}>
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <h3 className="font-bold text-base">Related Concepts</h3>
+                                                        <div className="flex rounded border border-gray-300 overflow-hidden text-xs">
+                                                            {['graph','text','none'].map(mode => (
+                                                                <button key={mode}
+                                                                    onClick={() => { setRelationsView(mode); localStorage.setItem('relationsView', mode); }}
+                                                                    className={`px-2 py-0.5 transition-colors ${relationsView === mode ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                                                                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    {relationsView === 'graph' && <div style={{ position: 'relative', overflow: 'hidden' }}>
                                                         <div id="concept-graph" style={{ width: '100%', height: '500px' }} />
                                                         <div className="text-sm text-gray-600 italic mt-2">Hover over a node to expand its relations.</div>
                                                         {hoveredNode && hoverMenuPosition && (
@@ -1860,8 +1887,62 @@
                                                             </div>
                                                         )}
                                                     </div>}
+                                                    {relationsView === 'text' && (
+                                                        <div className="space-y-1.5 text-sm ml-1">
+                                                            {concept.cr && Object.entries(
+                                                                concept.cr.reduce((acc, rel) => {
+                                                                    if (!acc[rel.t]) acc[rel.t] = [];
+                                                                    acc[rel.t].push(rel.to);
+                                                                    return acc;
+                                                                }, {})
+                                                            ).map(([relType, cids]) => (
+                                                                <div key={relType} className="flex gap-2 flex-wrap items-baseline">
+                                                                    <span className="text-gray-500 italic flex-shrink-0">{relationNames[relType] || relType}:</span>
+                                                                    {cids.map(cid => {
+                                                                        const li = getConceptLabel(parseInt(cid), definitionLanguage);
+                                                                        return (
+                                                                            <button key={cid} onClick={() => handleConceptClick(cid)}
+                                                                                className="text-blue-600 hover:underline">
+                                                                                {li?.form || `#${cid}`}
+                                                                                {li?.lang && li.lang !== definitionLanguage && <span className="text-gray-400 text-xs ml-0.5">[{li.lang}]</span>}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ))}
+                                                            {hasSenseRels && Object.entries(senseRelsByType).map(([relType, rels]) => (
+                                                                <div key={`sr-${relType}`} className="flex gap-2 flex-wrap items-baseline">
+                                                                    <span className="text-gray-500 italic flex-shrink-0">{relationNames[relType] || relType}:</span>
+                                                                    {rels.map(({ fromLemma, toSenseId }, i) => {
+                                                                        const toSense = loadedSenses[toSenseId];
+                                                                        const cid = toSense?.c?.toString();
+                                                                        const li = cid ? getConceptLabel(parseInt(cid), definitionLanguage) : null;
+                                                                        const conceptLabel = li?.form;
+                                                                        return (
+                                                                            <span key={i} className="whitespace-nowrap">
+                                                                                <button onClick={() => toSense?.l && handleWordformClickWithSense(toSense.l, toSenseId)}
+                                                                                    className="text-blue-600 hover:underline">
+                                                                                    {toSense?.l || '…'}
+                                                                                </button>
+                                                                                {conceptLabel && conceptLabel !== toSense?.l && (
+                                                                                    <span className="text-gray-500 ml-0.5">
+                                                                                        ({conceptLabel}{li.lang !== definitionLanguage && <span className="text-gray-400 text-xs ml-0.5">[{li.lang}]</span>})
+                                                                                    </span>
+                                                                                )}
+                                                                                {li?.lang && li.lang !== definitionLanguage && conceptLabel === toSense?.l && (
+                                                                                    <span className="text-gray-400 text-xs ml-0.5">[{li.lang}]</span>
+                                                                                )}
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
+                                                );
+                                            })()}
+
 
                                             {altDefs.length > 0 && (
                                                 <div className="mb-4">
