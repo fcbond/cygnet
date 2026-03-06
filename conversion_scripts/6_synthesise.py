@@ -121,7 +121,9 @@ CREATE TABLE resources (
     email            TEXT,
     status           TEXT,
     confidence_score REAL,
-    extra            TEXT
+    extra            TEXT,
+    synset_count     INTEGER,
+    sense_count      INTEGER
 );
 """
 
@@ -1046,6 +1048,98 @@ class MergeBuilder:
             ) sub WHERE senses.rowid = sub.sid
         """)
 
+    def detect_cycles(self) -> int:
+        """Detect cycles in the IS-A hierarchy using Tarjan's SCC algorithm.
+
+        Each strongly connected component with more than one node (or any
+        self-loop) constitutes a cycle group. Logs one WARNING per SCC,
+        listing the ILIs involved. Returns the number of cyclic SCCs.
+        """
+        hypernym_types = {r[0] for r in self.cur.execute(
+            "SELECT rowid FROM relation_types "
+            "WHERE type IN ('class_hypernym', 'instance_hypernym')"
+        ).fetchall()}
+        if not hypernym_types:
+            return 0
+
+        ph = ','.join('?' * len(hypernym_types))
+        edges = self.cur.execute(
+            f"SELECT source_rowid, target_rowid FROM synset_relations "
+            f"WHERE type_rowid IN ({ph})",
+            list(hypernym_types),
+        ).fetchall()
+
+        children: dict[int, list[int]] = {}
+        nodes: set[int] = set()
+        for src, tgt in edges:
+            children.setdefault(src, []).append(tgt)
+            nodes.add(src)
+            nodes.add(tgt)
+
+        # Iterative Tarjan's SCC
+        index_counter = [0]
+        index: dict[int, int] = {}
+        lowlink: dict[int, int] = {}
+        on_stack: dict[int, bool] = {}
+        scc_stack: list[int] = []
+        cyclic_sccs: list[list[int]] = []
+
+        for start in nodes:
+            if start in index:
+                continue
+            # Iterative DFS using an explicit call stack
+            dfs_stack: list[tuple[int, object]] = [
+                (start, iter(children.get(start, [])))
+            ]
+            index[start] = lowlink[start] = index_counter[0]
+            index_counter[0] += 1
+            on_stack[start] = True
+            scc_stack.append(start)
+
+            while dfs_stack:
+                v, nbrs = dfs_stack[-1]
+                advanced = False
+                for w in nbrs:
+                    if w not in index:
+                        index[w] = lowlink[w] = index_counter[0]
+                        index_counter[0] += 1
+                        on_stack[w] = True
+                        scc_stack.append(w)
+                        dfs_stack.append((w, iter(children.get(w, []))))
+                        advanced = True
+                        break
+                    elif on_stack.get(w):
+                        lowlink[v] = min(lowlink[v], index[w])
+
+                if not advanced:
+                    dfs_stack.pop()
+                    if dfs_stack:
+                        parent = dfs_stack[-1][0]
+                        lowlink[parent] = min(lowlink[parent], lowlink[v])
+                    if lowlink[v] == index[v]:
+                        scc: list[int] = []
+                        while True:
+                            w = scc_stack.pop()
+                            on_stack[w] = False
+                            scc.append(w)
+                            if w == v:
+                                break
+                        if len(scc) > 1 or (scc[0] in children and
+                                            scc[0] in children[scc[0]]):
+                            cyclic_sccs.append(scc)
+
+        for scc in cyclic_sccs:
+            ili_map = dict(self.cur.execute(
+                f"SELECT rowid, ili FROM synsets "
+                f"WHERE rowid IN ({','.join('?' * len(scc))})",
+                scc,
+            ).fetchall())
+            nodes_str = ', '.join(ili_map.get(n) or str(n) for n in scc)
+            logger.warning('Cyclic SCC in hypernym graph (%d nodes): %s',
+                           len(scc), nodes_str)
+
+        return len(cyclic_sccs)
+
     def insert_resources(self) -> None:
         """Write collected resource metadata and back-fill implicit resources."""
         known_lmf = {'id', 'version', 'label', 'language', 'url', 'citation',
@@ -1091,6 +1185,31 @@ class MergeBuilder:
                  meta.get('url'), meta.get('licence'), meta.get('citation')),
             )
             print(f'  Added implicit resource: {code}')
+
+        # Compute per-resource synset and sense coverage
+        prov_senses_table = self._prov_table_rowid('senses')
+        resource_senses: dict[str, list[int]] = {}
+        for code, sense_rowid in self.prov_cur.execute(
+            'SELECT pr.code, p.item_rowid FROM provenance p '
+            'JOIN prov_resources pr ON p.resource_rowid = pr.rowid '
+            'WHERE p.table_rowid = ?',
+            (prov_senses_table,),
+        ):
+            resource_senses.setdefault(code, []).append(sense_rowid)
+
+        if resource_senses:
+            sense_to_synset = dict(self.cur.execute(
+                'SELECT rowid, synset_rowid FROM senses'
+            ).fetchall())
+            for code, sense_rowids in resource_senses.items():
+                synsets = len({
+                    sense_to_synset[r] for r in sense_rowids if r in sense_to_synset
+                })
+                self.cur.execute(
+                    'UPDATE resources SET synset_count = ?, sense_count = ? '
+                    'WHERE code = ?',
+                    (synsets, len(sense_rowids), code),
+                )
 
     def create_indexes(self) -> None:
         """Create indexes before post-processing queries (critical for performance)."""
@@ -1165,6 +1284,13 @@ def main() -> None:
 
     print('\nCreating indexes...')
     builder.create_indexes()
+
+    print('\nPhase 1b: Detecting cycles in hypernym graph...')
+    n_cycles = builder.detect_cycles()
+    if n_cycles:
+        print(f'  WARNING: {n_cycles:,} cycle(s) detected (see {log_path})')
+    else:
+        print('  No cycles detected.')
 
     print('\nPhase 2: Merging case-variant lexemes...')
     removed = builder.merge_case_variants()

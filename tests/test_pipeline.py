@@ -1,7 +1,7 @@
 """Tests for MergeBuilder post-processing pipeline phases.
 
 Covers: cascade_delete, merge_case_variants, remove_orphans,
-        compute_sense_indices, and insert_resources.
+        compute_sense_indices, insert_resources, and detect_cycles.
 """
 
 import sqlite3
@@ -318,3 +318,102 @@ class TestResources:
             ).fetchone()
         assert row is not None
         assert row[0] == 'fr'
+
+    def test_synset_count_populated(self, built_db):
+        with sqlite3.connect(built_db) as conn:
+            row = conn.execute(
+                "SELECT synset_count FROM resources WHERE code = 'wn-en'"
+            ).fetchone()
+        assert row is not None
+        assert row[0] > 0
+
+    def test_sense_count_populated(self, built_db):
+        with sqlite3.connect(built_db) as conn:
+            row = conn.execute(
+                "SELECT sense_count FROM resources WHERE code = 'wn-en'"
+            ).fetchone()
+        assert row is not None
+        assert row[0] > 0
+
+    def test_fr_sense_count_equals_one(self, built_db):
+        """wn-fr contributes exactly 1 sense (fr:chien)."""
+        with sqlite3.connect(built_db) as conn:
+            row = conn.execute(
+                "SELECT sense_count FROM resources WHERE code = 'wn-fr'"
+            ).fetchone()
+        assert row is not None
+        assert row[0] == 1
+
+
+# ---------------------------------------------------------------------------
+# detect_cycles
+# ---------------------------------------------------------------------------
+
+# XML body: three concepts A→B→C (no cycle)
+_CHAIN_BODY = """\
+<Concept id="cili.a1" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-a" version="1.0"/>
+</Concept>
+<Concept id="cili.a2" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-a" version="1.0"/>
+</Concept>
+<Concept id="cili.a3" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-a" version="1.0"/>
+</Concept>
+<Gloss definiendum="cili.a1" language="en">
+  <AnnotatedSentence>alpha</AnnotatedSentence>
+  <Provenance resource="wn-a" version="1.0"/>
+</Gloss>
+<Gloss definiendum="cili.a2" language="en">
+  <AnnotatedSentence>beta</AnnotatedSentence>
+  <Provenance resource="wn-a" version="1.0"/>
+</Gloss>
+<Gloss definiendum="cili.a3" language="en">
+  <AnnotatedSentence>gamma</AnnotatedSentence>
+  <Provenance resource="wn-a" version="1.0"/>
+</Gloss>
+<ConceptRelation relation_type="class_hypernym" source="cili.a1" target="cili.a2">
+  <Provenance resource="wn-a" version="1.0"/>
+</ConceptRelation>
+<ConceptRelation relation_type="class_hypernym" source="cili.a2" target="cili.a3">
+  <Provenance resource="wn-a" version="1.0"/>
+</ConceptRelation>
+"""
+
+# XML body: adds the back-edge a3→a1 to close a cycle
+_CYCLE_BODY = _CHAIN_BODY + """\
+<ConceptRelation relation_type="class_hypernym" source="cili.a3" target="cili.a1">
+  <Provenance resource="wn-a" version="1.0"/>
+</ConceptRelation>
+"""
+
+
+class TestDetectCycles:
+    """detect_cycles() finds cycles in the IS-A hypernym graph."""
+
+    def test_no_cycle_in_chain(self, builder, tmp_path):
+        (tmp_path / 'wn.xml').write_text(wn_xml('wn-a', _CHAIN_BODY))
+        builder.process_file(tmp_path / 'wn.xml')
+        builder.create_indexes()
+        assert builder.detect_cycles() == 0
+
+    def test_simple_cycle_detected(self, builder, tmp_path):
+        (tmp_path / 'wn.xml').write_text(wn_xml('wn-a', _CYCLE_BODY))
+        builder.process_file(tmp_path / 'wn.xml')
+        builder.create_indexes()
+        assert builder.detect_cycles() >= 1
+
+    def test_cycle_logged_as_warning(self, builder, tmp_path, caplog):
+        import logging
+        (tmp_path / 'wn.xml').write_text(wn_xml('wn-a', _CYCLE_BODY))
+        builder.process_file(tmp_path / 'wn.xml')
+        builder.create_indexes()
+        with caplog.at_level(logging.WARNING, logger='synthesise'):
+            builder.detect_cycles()
+        assert 'Cyclic SCC' in caplog.text
+
+    def test_wn_en_has_no_cycles(self, builder):
+        """The curated test wordnet must be cycle-free."""
+        builder.process_file(_WORDNETS_DIR / 'wn-en.xml')
+        builder.create_indexes()
+        assert builder.detect_cycles() == 0
