@@ -734,7 +734,7 @@
                 })();
             }, []);
 
-            const getLangName = (langCode) => _langNames[langCode] || langCode.toUpperCase();
+            const getLangName = (langCode) => langCode ? (_langNames[langCode] || langCode.toUpperCase()) : '';
             const getLangFullName = getLangName;
 
             const getPosName = (posCode, capitalize = false) => {
