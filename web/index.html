@@ -2431,7 +2431,7 @@
                                 return url;
                             };
                             const sortResources = (col) => setWnSort(s => ({ col, asc: s.col === col ? !s.asc : true }));
-                            const sortedResources = React.useMemo(() => {
+                            const sortedResources = (() => {
                                 if (!wnSort.col) return allResources;
                                 const key = { Language: r => getLangFullName(r.language) || '', Name: r => r.label || r.code || '', Concepts: r => r.synset_count ?? -1, Senses: r => r.sense_count ?? -1, Version: r => r.version || '', Licence: r => shortLicence(r.licence) || '' }[wnSort.col];
                                 return [...allResources].sort((a, b) => {
@@ -2439,7 +2439,7 @@
                                     const cmp = typeof av === 'number' ? av - bv : av.localeCompare(bv);
                                     return wnSort.asc ? cmp : -cmp;
                                 });
-                            }, [allResources, wnSort]);
+                            })();
                             const SortTh = ({ col, right }) => {
                                 const active = wnSort.col === col;
                                 return <th className={`px-3 py-2 border border-gray-200 cursor-pointer select-none hover:bg-gray-200${right ? ' text-right' : ''}`} onClick={() => sortResources(col)}>{col}{active ? (wnSort.asc ? ' ▲' : ' ▼') : ''}</th>;
