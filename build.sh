@@ -168,7 +168,7 @@ if $DO_BUILD; then
     if $WITH_GLOSSTAG; then EXTRAS+=(--extra glosstag); fi
     if $WITH_TRANSLATE; then EXTRAS+=(--extra translate); fi
 
-    uv sync "${EXTRAS[@]}"
+    uv sync ${EXTRAS[@]+"${EXTRAS[@]}"}
 
     # Download NLTK data (wordnet lemmatizer needs this)
     uv run python -c "import nltk; nltk.download('wordnet', quiet=True); nltk.download('omw-1.4', quiet=True)"
