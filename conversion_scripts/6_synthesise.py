@@ -1375,9 +1375,10 @@ def main() -> None:
     db_path.parent.mkdir(exist_ok=True)
 
     all_files = sorted(input_dir.glob('*.xml'))
+    cili_files = [f for f in all_files if 'cili' in f.stem]
     oewn_files = [f for f in all_files if 'oewn' in f.stem]
-    other_files = [f for f in all_files if 'oewn' not in f.stem]
-    xml_files = oewn_files + other_files
+    other_files = [f for f in all_files if 'cili' not in f.stem and 'oewn' not in f.stem]
+    xml_files = cili_files + oewn_files + other_files
     print(f'Found {len(xml_files)} pre-synth files to merge')
 
     builder = MergeBuilder(db_path, prov_db_path)
