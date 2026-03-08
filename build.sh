@@ -173,6 +173,9 @@ if $DO_BUILD; then
     # Download NLTK data (wordnet lemmatizer needs this)
     uv run python -c "import nltk; nltk.download('wordnet', quiet=True); nltk.download('omw-1.4', quiet=True)"
 
+    # Install Playwright browser binaries if not already present
+    uv run playwright install chromium
+
     echo
 fi
 
