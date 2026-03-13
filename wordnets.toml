@@ -89,7 +89,7 @@ sk = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sk-2.0.tar.xz
 # Slovenian — OMW Slovenian
 sl = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sl-2.0.tar.xz"]
 
-# Albanian — OMW Albanian
+# Albanian — OMW Albanian 
 sq = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sq-2.0.tar.xz"]
 
 # Swedish — OMW Swedish
@@ -97,3 +97,8 @@ sv = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sv-2.0.tar.xz
 
 # Thai — OMW Thai
 th = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-th-2.0.tar.xz"]
+
+# Latvian -
+# Note bug in data, the licence is wrong, I have confirmed it is CC BY-SA 4.0
+lv = ["https://repository.clarin.lv/repository/xmlui/bitstream/handle/20.500.12574/119/tezaurs_2025_1_lmf.xml"]
+
