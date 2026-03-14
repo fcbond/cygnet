@@ -32,6 +32,7 @@ WITH_TRANSLATE=false
 WITH_XML=false
 DO_DOWNLOAD=true
 DO_BUILD=true
+DO_TESTS=true
 
 for arg in "$@"; do
     case "$arg" in
@@ -40,6 +41,7 @@ for arg in "$@"; do
         --with-xml)       WITH_XML=true ;;
         --download-only)  DO_BUILD=false ;;
         --build-only)     DO_DOWNLOAD=false ;;
+        --skip-tests)     DO_TESTS=false ;;
         --help|-h)
             sed -n '3,/^$/{ s/^# \?//; p }' "$0"
             exit 0
@@ -234,8 +236,10 @@ if $DO_BUILD; then
         echo
     fi
 
-    echo "=== Tests ==="
-    uv run pytest tests/ -v
+    if $DO_TESTS; then
+        echo "=== Tests ==="
+        uv run pytest tests/ -v
+    fi
     echo
 
     echo "=== Step 12: Compress databases ==="

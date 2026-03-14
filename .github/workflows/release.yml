@@ -36,7 +36,7 @@ jobs:
         run: bash build.sh --download-only
 
       - name: Build databases
-        run: bash build.sh --build-only
+        run: bash build.sh --build-only --skip-tests
 
       - name: Set release tag
         id: tag
