@@ -68,7 +68,7 @@
         // Production: fetch from the latest GitHub release assets
         const DB_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
             ? ''
-            : 'https://github.com/fcbond/cygnet/releases/latest/download/';
+            : 'https://github.com/rowanhm/cygnet/releases/latest/download/';
 
         // ========== SQL DATABASE LAYER ==========
         let _db = null;
@@ -630,7 +630,7 @@
             }, [settingsOpen]);
 
             useEffect(() => {
-                fetch(DB_BASE + 'relations.json')
+                fetch('relations.json')
                     .then(r => r.json())
                     .then(cfg => { _relConfig = cfg; _buildRelLookups(); setRelConfigLoaded(v => v + 1); })
                     .catch(e => console.warn('relations.json fetch failed:', e));
