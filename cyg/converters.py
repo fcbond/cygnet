@@ -364,36 +364,69 @@ class WordNetToCygnetConverter:
             pos = 'u'
         return NEW_POS_LABELS[pos]
 
+    def _load_spacy_model(self, candidates: list[str], disable: list[str]):
+        """Load the best available spaCy model from *candidates*.
+
+        Tries installed models first (no download).  For each candidate:
+        - OSError  → model not installed; download then retry once.
+        - ImportError → model's language dependency is missing (e.g. pymorphy3
+          for Russian, sudachipy for Japanese); skip to the next candidate and
+          log a hint about which optional extra to install.
+        Falls back to the multilingual model as the final candidate.
+        """
+        import shutil
+        import subprocess
+        from spacy.cli.download import get_compatibility, get_version
+
+        installed = set(spacy.util.get_installed_models())
+
+        def _download_and_load(name: str):
+            logger.info(f"  Downloading spaCy model '{name}'...")
+            version = get_version(name, get_compatibility())
+            wheel_url = (
+                f"https://github.com/explosion/spacy-models/releases/download/"
+                f"{name}-{version}/{name}-{version}-py3-none-any.whl"
+            )
+            runner = ['uv', 'pip'] if shutil.which('uv') else [sys.executable, '-m', 'pip']
+            subprocess.run([*runner, 'install', wheel_url], check=True)
+            return spacy.load(name, disable=disable)
+
+        # Prefer installed candidates; fall back to downloading the first one.
+        ordered = [m for m in candidates if m in installed] + \
+                  [m for m in candidates if m not in installed]
+
+        for model_name in ordered:
+            logger.info(f"  Loading spaCy model '{model_name}'...")
+            try:
+                nlp = spacy.load(model_name, disable=disable) \
+                      if model_name in installed else _download_and_load(model_name)
+                return nlp
+            except ImportError as exc:
+                logger.warning(
+                    f"  Skipping '{model_name}': missing language dependency "
+                    f"({exc}).  Install the relevant extra, e.g. "
+                    f"`uv pip install \"cygnet[{self.lexicon_language}]\"`."
+                )
+            except OSError:
+                logger.warning(f"  Could not load '{model_name}', trying next candidate.")
+
+        raise RuntimeError(f"No usable spaCy model found for language '{self.lexicon_language}'.")
+
     def _initialize_nlp_tools(self):
         """Initialize spaCy and NLTK tools for example processing."""
         logger.info(f"\nInitializing NLP tools for language '{self.lexicon_language}'...")
 
-        # Select spaCy model: prefer already-installed candidates, download the
-        # first if none are installed.  Keep tok2vec so that the morphologizer
-        # can assign features the lemmatizer needs (disabling it breaks
-        # lemmatisation for morphologically rich languages).
+        # Select and load a spaCy model using the candidate priority list.
+        # Keep tok2vec so morphologizer can assign features the lemmatizer needs
+        # (disabling it silently breaks lemmatisation for morphologically rich
+        # languages such as Russian, Slovenian, and Portuguese).
+        #
+        # Some language models require extra pip packages (e.g. pymorphy3 for
+        # Russian, sudachipy for Japanese).  If a candidate raises ImportError
+        # we log a warning and try the next candidate rather than crashing.
+        # Install the relevant extras with e.g. `uv pip install "cygnet[ru]"`.
         disable = ["parser", "ner"]
-        candidates = _spacy_candidates(self.lexicon_language)
-        installed = set(spacy.util.get_installed_models())
-        model_name = next((m for m in candidates if m in installed), candidates[0])
-        logger.info(f"  Loading spaCy model '{model_name}'...")
-        try:
-            self.nlp = spacy.load(model_name, disable=disable)
-        except OSError:
-            logger.info(f"  Downloading spaCy model '{model_name}'...")
-            import shutil
-            import subprocess
-            from spacy.cli.download import get_compatibility, get_version
-            version = get_version(model_name, get_compatibility())
-            wheel_url = (
-                f"https://github.com/explosion/spacy-models/releases/download/"
-                f"{model_name}-{version}/{model_name}-{version}-py3-none-any.whl"
-            )
-            if shutil.which('uv'):
-                subprocess.run(['uv', 'pip', 'install', wheel_url], check=True)
-            else:
-                subprocess.run([sys.executable, '-m', 'pip', 'install', wheel_url], check=True)
-            self.nlp = spacy.load(model_name, disable=disable)
+        self.nlp = self._load_spacy_model(_spacy_candidates(self.lexicon_language), disable)
 
         # Initialize NLTK lemmatizer
         logger.info("  Loading NLTK WordNet lemmatizer...")
