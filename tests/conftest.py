@@ -174,8 +174,9 @@ def test_db_dir(tmp_path_factory):
 
     # Assemble the server root: index.html + compressed DBs
     serve_dir = tmp_path_factory.mktemp('serve')
-    shutil.copy(Path(__file__).parent.parent / 'web' / 'index.html',
-                serve_dir / 'index.html')
+    web_dir = Path(__file__).parent.parent / 'web'
+    shutil.copy(web_dir / 'index.html', serve_dir / 'index.html')
+    shutil.copy(web_dir / 'relations.json', serve_dir / 'relations.json')
     shutil.copy(db_path.with_suffix('.db.gz'), serve_dir / 'cygnet.db.gz')
     shutil.copy(prov_path.with_suffix('.db.gz'), serve_dir / 'provenance.db.gz')
     return serve_dir

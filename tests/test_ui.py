@@ -500,3 +500,51 @@ class TestPublications:
         expect(page_ready.locator('text=Citation')).to_be_visible(timeout=5_000)
         expect(page_ready.locator('button', has_text='Maudslay')).to_be_visible()
         expect(page_ready.locator('button', has_text='Bond & Foster')).to_be_visible()
+
+
+# ---------------------------------------------------------------------------
+# Relation display names (relations.json)
+# ---------------------------------------------------------------------------
+
+class TestRelationNames:
+    def _wait_for_rel_config(self, page: Page) -> None:
+        """Block until relations.json has been fetched and parsed."""
+        page.wait_for_function(
+            "() => Object.keys(window._relTestHook.getConfig()).length > 0",
+            timeout=5_000,
+        )
+
+    def test_english_hypernym_label(self, page_ready: Page):
+        """getRelLabel returns English display name from relations.json."""
+        self._wait_for_rel_config(page_ready)
+        label = page_ready.evaluate(
+            "() => window._relTestHook.getLabel('hypernym')"
+        )
+        assert label == 'class hypernym'
+
+    def test_english_hyponym_label(self, page_ready: Page):
+        """getRelLabel resolves label by short code too."""
+        self._wait_for_rel_config(page_ready)
+        # '-hyp' is the short code for hyponym
+        label = page_ready.evaluate(
+            "() => window._relTestHook.getLabel('-hyp')"
+        )
+        assert label == 'class hyponym'
+
+    def test_japanese_hypernym_label(self, page_ready: Page):
+        """getRelLabel returns Japanese when display language is 'ja'."""
+        self._wait_for_rel_config(page_ready)
+        label = page_ready.evaluate(
+            "() => { window._relTestHook.setLang('ja'); "
+            "return window._relTestHook.getLabel('hypernym'); }"
+        )
+        assert label == '上位語'
+
+    def test_japanese_hyponym_label(self, page_ready: Page):
+        """getRelLabel returns Japanese hyponym label."""
+        self._wait_for_rel_config(page_ready)
+        label = page_ready.evaluate(
+            "() => { window._relTestHook.setLang('ja'); "
+            "return window._relTestHook.getLabel('hyponym'); }"
+        )
+        assert label == '下位語'

@@ -24,34 +24,36 @@
 
         // ========== RELATION MAPPINGS ==========
         // Map full DB relation names to short codes used by the UI
-        const RELATION_TO_SHORT = {
-            'antonym': 'ant', 'derivation': 'der', 'derivation_of': '-der',
-            'pertainym': 'ptr', 'pertainym_of': '-ptr',
-            'participle': 'prt', 'participle_of': '-prt',
-            'hypernym': 'hyp', 'hyponym': '-hyp',
-            'instance_hypernym': 'ihyp', 'instance_hyponym': '-ihyp',
-            'mero_member': 'mmer', 'holo_member': '-mmer',
-            'mero_part': 'pmer', 'holo_part': '-pmer',
-            'mero_substance': 'smer', 'holo_substance': '-smer',
-            'opposite': 'opp',
-            'causes': 'cau', 'is_caused_by': '-cau',
-            'entails': 'ent', 'is_entailed_by': '-ent',
+        // Relation config loaded from relations.json at startup.
+        // Structure: { dbName: { short, color, en, [langCode]: label, ... } }
+        let _relConfig = {};
+        let _relLang = 'en';
+
+        // Build lookup tables from _relConfig once loaded.
+        let RELATION_TO_SHORT = {};
+        let _relColors = {};
+        function _buildRelLookups() {
+            RELATION_TO_SHORT = {};
+            _relColors = {};
+            for (const [name, entry] of Object.entries(_relConfig)) {
+                if (entry.short) RELATION_TO_SHORT[name] = entry.short;
+                if (entry.color) _relColors[entry.short || name] = entry.color;
+            }
+        }
+
+        const getRelLabel = (shortOrName) => {
+            // Find entry by short code or DB name
+            const entry = _relConfig[shortOrName]
+                ?? Object.values(_relConfig).find(e => e.short === shortOrName);
+            if (entry) return entry[_relLang] ?? entry.en ?? shortOrName;
+            return shortOrName.replace(/_/g, ' ').replace(/^-/, '');
         };
 
-        const relationNames = {
-            'ant': 'antonym', 'der': 'derivation', 'ptr': 'pertainym',
-            'prt': 'participle', 'syn': 'synonym',
-            'hyp': 'hypernym', 'ihyp': 'instance hypernym',
-            'mmer': 'member meronym', 'pmer': 'part meronym', 'smer': 'substance meronym',
-            'opp': 'opposite', 'cau': 'causes', 'ent': 'entails',
-        };
-
-        const relationColors = {
-            'ant': '#ef4444', 'der': '#f59e0b', 'ptr': '#10b981',
-            'prt': '#06b6d4', 'syn': '#10b981',
-            'hyp': '#3b82f6', 'ihyp': '#6366f1',
-            'mmer': '#8b5cf6', 'pmer': '#a855f7', 'smer': '#d946ef',
-            'opp': '#ec4899', 'cau': '#f43f5e', 'ent': '#14b8a6',
+        // Test hook — allows Playwright tests to inspect and manipulate rel config
+        window._relTestHook = {
+            setLang: (l) => { _relLang = l; },
+            getLabel: (s) => getRelLabel(s),
+            getConfig: () => _relConfig,
         };
 
         const posToHumanReadable = {
@@ -538,6 +540,7 @@
         // ========== MAIN COMPONENT ==========
         function DictionaryBrowser() {
             const [dbReady, setDbReady] = useState(false);
+            const [relConfigLoaded, setRelConfigLoaded] = useState(false);
             const [dbError, setDbError] = useState(null);
             const [dbProgress, setDbProgress] = useState('');
             const [downloadProgress, setDownloadProgress] = useState(null); // {loaded, total} or null
@@ -625,6 +628,13 @@
                 document.addEventListener('mousedown', handleClick);
                 return () => document.removeEventListener('mousedown', handleClick);
             }, [settingsOpen]);
+
+            useEffect(() => {
+                fetch(DB_BASE + 'relations.json')
+                    .then(r => r.json())
+                    .then(cfg => { _relConfig = cfg; _buildRelLookups(); setRelConfigLoaded(true); })
+                    .catch(e => console.warn('relations.json fetch failed:', e));
+            }, []);
 
             // Initialize database
             useEffect(() => {
@@ -716,6 +726,7 @@
                         setAllResources(queryResources());
                         setDbStats(queryStats());
                         setDbReady(true);
+
                     } catch (e) {
                         console.error('DB init error:', e);
                         setDbError(e.message);
@@ -1379,7 +1390,7 @@
                                     linksArray.push({
                                         source: sourceId, target: targetId,
                                         type: relType,
-                                        color: relationColors[shortCode] || '#999'
+                                        color: _relColors[shortCode] || '#999'
                                     });
                                 }
                             });
@@ -2129,7 +2140,7 @@
                                                                 }, {})
                                                             ).map(([relType, rels]) => (
                                                                 <div key={relType} className="flex gap-2 flex-wrap items-baseline">
-                                                                    <span className="text-gray-500 italic flex-shrink-0">{relationNames[relType] || relType}:</span>
+                                                                    <span className="text-gray-500 italic flex-shrink-0">{getRelLabel(relType)}:</span>
                                                                     {rels.map(rel => {
                                                                         const li = getConceptLabel(parseInt(rel.to), definitionLanguage);
                                                                         return (
@@ -2147,7 +2158,7 @@
                                                             ))}
                                                             {hasSenseRels && Object.entries(senseRelsByType).map(([relType, rels]) => (
                                                                 <div key={`sr-${relType}`} className="flex gap-2 flex-wrap items-baseline">
-                                                                    <span className="text-gray-500 italic flex-shrink-0">{relationNames[relType] || relType}:</span>
+                                                                    <span className="text-gray-500 italic flex-shrink-0">{getRelLabel(relType)}:</span>
                                                                     {rels.map(({ fromLemma, toSenseId, rid }, i) => {
                                                                         const toSense = loadedSenses[toSenseId];
                                                                         const cid = toSense?.c?.toString();
@@ -2230,7 +2241,7 @@
                                                                 return (
                                                                     <React.Fragment key={i}>
                                                                         {i > 0 && step.rel && (
-                                                                            <span className="text-gray-400 text-xs italic whitespace-nowrap">—{relationNames[RELATION_TO_SHORT[step.rel]] || step.rel.replace(/_/g,' ')}→</span>
+                                                                            <span className="text-gray-400 text-xs italic whitespace-nowrap">—{getRelLabel(step.rel)}→</span>
                                                                         )}
                                                                         <button
                                                                             onClick={() => handleConceptClick(step.node)}
@@ -2339,7 +2350,7 @@
                                                     <div className="ml-2 space-y-1 text-sm">
                                                         {sense.sr.map((rel, i) => (
                                                             <div key={i}>
-                                                                <span className="text-gray-600">{relationNames[rel.t] || rel.t}:</span>{' '}
+                                                                <span className="text-gray-600">{getRelLabel(rel.t)}:</span>{' '}
                                                                 <button onClick={() => handleSenseClick(rel.to)} className="text-blue-600 hover:underline">{rel.to}</button>
                                                             </div>
                                                         ))}
