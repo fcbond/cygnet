@@ -20,7 +20,7 @@ Expected search results (exact/glob match on normalized_form):
 import pytest
 from playwright.sync_api import Page, expect
 
-_DB_LOAD_TIMEOUT = 30_000   # ms — small test DB loads quickly
+_DB_LOAD_TIMEOUT = 60_000   # ms — allow extra time on slower/loaded machines
 _SEARCH_TIMEOUT = 15_000    # ms
 
 
