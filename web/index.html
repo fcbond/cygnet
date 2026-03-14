@@ -64,11 +64,9 @@
         const remove_accents = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
         // ========== DATABASE URLs ==========
-        // Local dev (localhost): serve from web/ directory via run.sh
-        // Production: fetch from the latest GitHub release assets
-        const DB_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-            ? ''
-            : 'https://github.com/rowanhm/cygnet/releases/latest/download/';
+        // Databases are always served from the same directory as this HTML file.
+        // Locally: web/ after running build.sh. In production: downloaded by the Pages workflow.
+        const DB_BASE = '';
 
         // ========== SQL DATABASE LAYER ==========
         let _db = null;
@@ -1611,38 +1609,7 @@
 
             // Loading / error states
             if (dbError) {
-                return (
-                    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-                        <div className="max-w-md">
-                            <h2 className="font-bold text-xl mb-2">Error Loading Database</h2>
-                            <p className="mb-4">{dbError}</p>
-                            <p className="text-sm text-gray-600">
-                                Make sure cygnet.db.gz is in the same directory as this HTML file.
-                            </p>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (!dbReady) {
-                return (
-                    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-                        <div className="text-center w-72">
-                            <h1 className="text-4xl mb-4">🦢</h1>
-                            <p className="text-gray-600 mb-3">{dbProgress || 'Initializing...'}</p>
-                            {downloadProgress && (
-                                <div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                                        <div className="bg-blue-500 h-2 rounded-full transition-all"
-                                            style={{ width: `${Math.min(100, (downloadProgress.loaded / (downloadProgress.compressedTotal * 2.5)) * 100).toFixed(0)}%` }} />
-                                    </div>
-                                    <p className="text-xs text-gray-500">{(downloadProgress.loaded / 1048576).toFixed(0)} MB decompressed</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
+            useEffect(() => { if (dbError) setActiveTab('about'); }, [dbError]);
 
             // Group results
             const filteredResults = getFilteredWordforms();
@@ -1806,7 +1773,36 @@
                     <main className="w-full max-w-4xl mx-auto px-4 pt-6 pb-4 flex-grow">
                         {activeTab === 'browser' && (
                             <div>
-                                {view === 'search' && (
+                                {dbError && (
+                                    <div className="max-w-md mx-auto mt-16 text-center">
+                                        <h2 className="font-bold text-xl mb-2">Error Loading Database</h2>
+                                        <p className="mb-4 text-gray-700">{dbError}</p>
+                                        <p className="text-sm text-gray-500">
+                                            On localhost, make sure <code>cygnet.db.gz</code> is in the same directory as this HTML file.<br/>
+                                            In production, the database is fetched from the{' '}
+                                            <a href="https://github.com/rowanhm/cygnet/releases/latest" className="text-blue-600 hover:underline">latest GitHub release</a>.
+                                            The release may still be building.
+                                        </p>
+                                    </div>
+                                )}
+                                {!dbReady && !dbError && (
+                                    <div className="flex justify-center mt-16">
+                                        <div className="text-center w-72">
+                                            <h1 className="text-4xl mb-4">🦢</h1>
+                                            <p className="text-gray-600 mb-3">{dbProgress || 'Initializing...'}</p>
+                                            {downloadProgress && (
+                                                <div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                                                        <div className="bg-blue-500 h-2 rounded-full transition-all"
+                                                            style={{ width: `${Math.min(100, (downloadProgress.loaded / (downloadProgress.compressedTotal * 2.5)) * 100).toFixed(0)}%` }} />
+                                                    </div>
+                                                    <p className="text-xs text-gray-500">{(downloadProgress.loaded / 1048576).toFixed(0)} MB decompressed</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {view === 'search' && dbReady && (
                                     <div className="mb-8">
                                         {!senseFilter && (
                                             <div className="flex items-center gap-2">
@@ -2005,7 +2001,7 @@
                                     </div>
                                 )}
 
-                                {view === 'concept' && selectedConcept && (() => {
+                                {view === 'concept' && selectedConcept && dbReady && (() => {
                                     const concept = getConceptData(selectedConcept) || loadConcept(selectedConcept);
                                     if (!concept) return <div className="text-gray-600">Loading concept...</div>;
 
@@ -2318,7 +2314,7 @@
                                     );
                                 })()}
 
-                                {view === 'sense' && selectedSense && (() => {
+                                {view === 'sense' && selectedSense && dbReady && (() => {
                                     const sense = loadedSenses[selectedSense] || loadSenseData(selectedSense);
                                     if (!sense?.l) return <div className="text-gray-600">Loading sense...</div>;
                                     return (
