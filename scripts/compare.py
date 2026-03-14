@@ -120,7 +120,7 @@ def latex_table(
     # rows: (metric, cygnet_value, wn_value, comment)
     rows = [
         ("DB size (MB)",       f"{cygnet_mb:.1f}",                    f"{wn_mb:.1f}",  f"+ {prov_mb:.1f}\\,MB provenance DB"),
-        ("Wordnets loaded",    fmt(cygnet["wordnets"]),                fmt(wndb["wordnets"]),             ""),
+        ("Wordnets loaded",    fmt(cygnet["wordnets"]),                fmt(wndb["wordnets"]),             r"CantoneseWN counts as 2 in \texttt{wn} (en + yue)"),
         ("Synsets",            fmt(cygnet["synsets"]),                 fmt(wndb["synsets"]),              ""),
         ("Words",              fmt(cygnet["entries"]),                 fmt(wndb["entries"]),              ""),
         ("Senses",             fmt(cygnet["senses"]),                  fmt(wndb["senses"]),               ""),
