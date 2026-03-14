@@ -459,3 +459,44 @@ class TestArasaac:
         expect(
             page_ready.locator('text=dashed border')
         ).to_be_visible(timeout=5_000)
+
+
+class TestPublications:
+    def test_publications_tab_shows_main_papers(self, page_ready: Page):
+        """Publications tab lists the Cygnet and OMW papers."""
+        page_ready.locator('button', has_text='Publications').click()
+        expect(page_ready.locator('text=Maudslay')).to_be_visible(timeout=5_000)
+        expect(page_ready.locator('text=Bond').first).to_be_visible()
+
+    def test_publications_tab_shows_wordnet_citations_header(self, page_ready: Page):
+        """Publications tab has a Wordnet Citations section."""
+        page_ready.locator('button', has_text='Publications').click()
+        expect(page_ready.locator('text=Wordnet Citations')).to_be_visible(timeout=5_000)
+
+    def test_publications_tab_shows_disclaimer(self, page_ready: Page):
+        """Publications tab shows the disclaimer about citation source."""
+        page_ready.locator('button', has_text='Publications').click()
+        expect(
+            page_ready.locator('text=Citation data taken from')
+        ).to_be_visible(timeout=5_000)
+
+    def test_publications_tab_renders_wordnet_citation(self, page_ready: Page):
+        """Wordnet citation from fixture is rendered (RST converted to HTML)."""
+        page_ready.locator('button', has_text='Publications').click()
+        page_ready.wait_for_selector('text=Wordnet Citations', timeout=5_000)
+        expect(page_ready.locator('text=Test English WordNet')).to_be_visible()
+
+    def test_publications_tab_rst_link_rendered(self, page_ready: Page):
+        """RST hyperlink in citation is converted to a clickable <a> tag."""
+        page_ready.locator('button', has_text='Publications').click()
+        page_ready.wait_for_selector('text=Wordnet Citations', timeout=5_000)
+        expect(
+            page_ready.locator('a[href="https://github.com/rowanhm/cygnet"]')
+        ).to_be_visible()
+
+    def test_about_tab_citation_section(self, page_ready: Page):
+        """About tab has a Citation section with links to key papers."""
+        page_ready.locator('button', has_text='About').click()
+        expect(page_ready.locator('text=Citation')).to_be_visible(timeout=5_000)
+        expect(page_ready.locator('button', has_text='Maudslay')).to_be_visible()
+        expect(page_ready.locator('button', has_text='Bond & Foster')).to_be_visible()
