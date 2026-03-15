@@ -118,6 +118,7 @@ class Issue:
     explanation: str
     recommendation: str
     items: list[str]  # up to MAX_EXAMPLES representative instances
+    source_hint: str = ""  # where to find the complete list
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +444,8 @@ def check_internal_reversed_relations(data: WordnetData) -> Issue | None:
             continue
         key = frozenset({src, tgt})
         if (tgt, rel, src) in seen and key not in already_reported:
-            conflicts.append(f"{src} {rel} {tgt}  ←→  {tgt} {rel} {src}")
+            src_lbl, tgt_lbl = label_concept(src, data), label_concept(tgt, data)
+            conflicts.append(f"{src_lbl} {rel} {tgt_lbl}  ←→  {tgt_lbl} {rel} {src_lbl}")
             already_reported.add(key)
         seen.add((src, rel, tgt))
 
@@ -645,7 +647,7 @@ def parse_conflicts_json(resource_id: str, xml_stem: str) -> tuple[list[dict], l
 # Checks derived from log files
 # ---------------------------------------------------------------------------
 
-def issues_from_json_log(log: dict) -> list[Issue]:
+def issues_from_json_log(log: dict, log_path: Path | None = None) -> list[Issue]:
     """Turn converter-log entries into Issue objects."""
     if not log:
         return []
@@ -676,6 +678,10 @@ def issues_from_json_log(log: dict) -> list[Issue]:
                 "https://github.com/globalwordnet/cili."
             ),
             items=items[:MAX_EXAMPLES],
+            source_hint=(
+                f"{log_path.name} (synset_concept_pos_mismatches.by_pos_pair)"
+                if log_path else ""
+            ),
         ))
 
     # POS mismatches between a lexeme's POS and its linked concept's POS
@@ -698,6 +704,10 @@ def issues_from_json_log(log: dict) -> list[Issue]:
                 "Either correct the POS tag on the lexeme or re-link it to the right concept."
             ),
             items=items[:MAX_EXAMPLES],
+            source_hint=(
+                f"{log_path.name} (lexeme_concept_pos_mismatches.by_pos_pair)"
+                if log_path else ""
+            ),
         ))
 
     # Relations dropped because the same relation was already established by another wordnet
@@ -788,27 +798,36 @@ def issues_from_json_log(log: dict) -> list[Issue]:
         for entry in failed[:MAX_EXAMPLES]:
             text = entry.get("text", "")[:70]
             forms = entry.get("candidate_wordforms", [])
-            forms_str = ", ".join(f'"{f}"' for f in forms[:3])
-            items.append(f'"{text}" (looked for: {forms_str})')
+            if forms:
+                forms_str = ", ".join(f'"{f}"' for f in forms[:3])
+                items.append(f'"{text}" (looked for: {forms_str})')
+            else:
+                items.append(f'"{text}" (no senses/wordforms found for this concept)')
         _add(Issue(
             severity="WARNING",
             title="Example sentences not matched to a sense (conversion time)",
             total=ex_skipped,
             explanation=(
-                f"{ex_skipped:,} example sentence(s) were discarded during conversion "
-                "because the target word could not be found in the sentence text "
-                "after morphological analysis. Note that some of these mismatches "
-                "are due to limitations in our morphological analyser rather than "
-                "errors in your data — we apologise for the false positives. "
+                f"{ex_skipped:,} example sentence(s) were discarded during conversion. "
+                "Two failure modes are possible: (1) the concept had no senses so no "
+                "candidate wordforms could be identified — marked 'no senses/wordforms "
+                "found'; (2) the target word could not be matched in the sentence text "
+                "after morphological analysis. For mode (2), some mismatches are due to "
+                "limitations in our morphological analyser rather than errors in your "
+                "data — we apologise for the false positives. "
                 "These examples are absent from the pre-synthesised file."
             ),
             recommendation=(
-                "Where the word (or an inflected form) genuinely appears in the "
-                "sentence, no action is needed on your side — this is a known "
-                "limitation of our analyser. Otherwise, check that the sentence "
-                "has not been paraphrased or truncated."
+                "For items marked 'no senses/wordforms found': check whether the concept "
+                "has <Sense> elements in this file — if not, add them or remove the example. "
+                "For morphological mismatches: if the word (or an inflected form) genuinely "
+                "appears in the sentence, no action is needed on your side."
             ),
             items=items,
+            source_hint=(
+                f"{log_path.name} (statistics.examples.failed_matches)"
+                if log_path else ""
+            ),
         ))
 
     return issues
@@ -850,6 +869,7 @@ def issues_from_conflicts_log(
                 "If you believe the other wordnet is wrong, contact its maintainers."
             ),
             items=items,
+            source_hint=f"{CONFLICTS_JSON.name} (reversed_relations, resource_id={data.resource_id})",
         ))
 
     if cycles:
@@ -878,6 +898,7 @@ def issues_from_conflicts_log(
                 "If the other wordnet's chain is wrong, report it there."
             ),
             items=items,
+            source_hint=f"{CONFLICTS_JSON.name} (cycles, xml_stem={data.resource_id})",
         ))
 
     return issues
@@ -955,7 +976,8 @@ def format_report(
                     for item in issue.items:
                         lines.append(f"- `{item}`")
                     if remaining > 0:
-                        lines.append(f"- _(and {_fmt(remaining)} more…)_")
+                        hint = f" — see `{issue.source_hint}`" if issue.source_hint else ""
+                        lines.append(f"- _(and {_fmt(remaining)} more{hint})_")
             else:
                 lines.append(f"\n  [{_fmt(issue.total)}]  {issue.title}")
                 lines.append(f"  {issue.explanation}")
@@ -964,7 +986,8 @@ def format_report(
                     for item in issue.items:
                         lines.append(f"      • {item}")
                     if remaining > 0:
-                        lines.append(f"      • … and {_fmt(remaining)} more")
+                        hint = f" — see {issue.source_hint}" if issue.source_hint else ""
+                        lines.append(f"      • … and {_fmt(remaining)} more{hint}")
 
     return "\n".join(lines)
 
@@ -978,11 +1001,15 @@ def report_file(path: Path, markdown: bool = False) -> None:
     data = parse_xml(path)
     if data.resource_id == "cili":
         return
-    issues = run_checks(data)
+    xml_issues = run_checks(data)
+    for issue in xml_issues:
+        issue.source_hint = path.name
+    issues = xml_issues
 
     # Augment with converter log (created at pre-synth time)
+    log_path = path.with_name(path.stem + "_log.json")
     json_log = load_json_log(path)
-    issues.extend(issues_from_json_log(json_log))
+    issues.extend(issues_from_json_log(json_log, log_path if log_path.exists() else None))
 
     # Augment with merge-time relation conflicts log
     reversed_rels, cycles = parse_conflicts_json(data.resource_id, path.stem)

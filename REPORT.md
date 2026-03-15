@@ -59,7 +59,7 @@ The script combines three sources, using whichever are available:
 
 | Issue | Cause | What Cygnet does |
 |---|---|---|
-| **Contradictory relations within this file** | Same directed relation asserted in both directions (e.g. `A hypernym B` and `B hypernym A`) | First accepted; second skipped |
+| **Contradictory relations within this file** | Same directed relation asserted in both directions (e.g. `A hypernym B` and `B hypernym A`) | First accepted; second skipped. Concept IDs are shown with their wordforms (e.g. `dog hypernym animal`) |
 | **Senses referencing undeclared entries** | `<Sense signifier="…">` points to an entry ID not in this file | Sense silently skipped |
 | **Example sentences with no matching sense annotations** | `<Example>` has no `<AnnotatedToken sense="…">` whose sense ID is in this file | Example silently discarded |
 | **Self-referential relations** | `source == target` in a `<ConceptRelation>` or `<SenseRelation>` | Silently skipped |
@@ -67,7 +67,7 @@ The script combines three sources, using whichever are available:
 | **POS mismatches: lexeme vs its concept** | Lexeme's POS differs from its linked concept's POS | Stored as-is; may indicate a wrong sense link |
 | **Relations with incompatible POS categories** | Source and target have POS categories that are incompatible for the relation type | Relation skipped |
 | **Senses with unresolvable synset (conversion time)** | At conversion, the synset ID in the source LMF could not be found | Sense absent from the pre-synth file |
-| **Example sentences not matched to a sense (conversion time)** | During conversion, the target lemma could not be found in the sentence text | Example absent from the pre-synth file |
+| **Example sentences not matched to a sense (conversion time)** | Two sub-cases: (1) the concept had no senses so no wordforms could be identified — marked `no senses/wordforms found`; (2) the target lemma could not be matched in the sentence after morphological analysis | Example absent from the pre-synth file |
 
 ### INFO issues — for awareness
 

@@ -341,6 +341,49 @@ class TestCheckInternalReversedRelations:
         assert issue.severity == "WARNING"
         assert issue.total == 1
 
+    def test_items_include_labels(self, tmp_path):
+        """Concept labels (wordforms) appear in the conflict string."""
+        body = """\
+<Concept id="cili.i1" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-test" version="1.0"/>
+</Concept>
+<Gloss definiendum="cili.i1" language="en">
+  <AnnotatedSentence>dog</AnnotatedSentence>
+  <Provenance resource="wn-test" version="1.0"/>
+</Gloss>
+<Concept id="cili.i2" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-test" version="1.0"/>
+</Concept>
+<Gloss definiendum="cili.i2" language="en">
+  <AnnotatedSentence>animal</AnnotatedSentence>
+  <Provenance resource="wn-test" version="1.0"/>
+</Gloss>
+<Lexeme id="en.NOUN.dog" language="en" grammatical_category="NOUN">
+  <Wordform form="dog"/>
+  <Provenance resource="wn-test" version="1.0"/>
+</Lexeme>
+<Lexeme id="en.NOUN.animal" language="en" grammatical_category="NOUN">
+  <Wordform form="animal"/>
+  <Provenance resource="wn-test" version="1.0"/>
+</Lexeme>
+<Sense id="sense.dog" signifier="en.NOUN.dog" signified="cili.i1">
+  <Provenance resource="wn-test" version="1.0"/>
+</Sense>
+<Sense id="sense.animal" signifier="en.NOUN.animal" signified="cili.i2">
+  <Provenance resource="wn-test" version="1.0"/>
+</Sense>
+<ConceptRelation relation_type="hypernym" source="cili.i1" target="cili.i2">
+  <Provenance resource="wn-test" version="1.0"/>
+</ConceptRelation>
+<ConceptRelation relation_type="hypernym" source="cili.i2" target="cili.i1">
+  <Provenance resource="wn-test" version="1.0"/>
+</ConceptRelation>
+"""
+        data = _parse(tmp_path, body)
+        issue = check_internal_reversed_relations(data)
+        assert issue is not None
+        assert any("dog" in item and "animal" in item for item in issue.items)
+
     def test_symmetric_antonym_not_flagged(self, tmp_path):
         """antonym is symmetric — both directions in the same file is not a conflict."""
         body = """\
@@ -584,6 +627,40 @@ class TestRunChecks:
         assert "CRITICAL" in text
         assert "cili.i99" in text
 
+    def test_format_report_source_hint_on_overflow(self, tmp_path):
+        """When items are truncated, the 'and N more' line includes the source hint."""
+        from dataclasses import replace as _replace
+        data = _parse(tmp_path, _GOOD)
+        # Build an issue with 12 items (> MAX_EXAMPLES=10) and a source_hint
+        issue = _mod.Issue(
+            severity="INFO",
+            title="Dummy",
+            total=12,
+            explanation="x",
+            recommendation="y",
+            items=[f"item{i}" for i in range(10)],
+            source_hint="myfile_log.json (some.key)",
+        )
+        text = format_report(tmp_path / "wn-test.xml", data, [issue], markdown=False)
+        assert "… and 2 more" in text
+        assert "myfile_log.json (some.key)" in text
+
+    def test_format_report_no_hint_when_empty(self, tmp_path):
+        """When source_hint is empty the overflow line has no extra text."""
+        data = _parse(tmp_path, _GOOD)
+        issue = _mod.Issue(
+            severity="INFO",
+            title="Dummy",
+            total=12,
+            explanation="x",
+            recommendation="y",
+            items=[f"item{i}" for i in range(10)],
+            source_hint="",
+        )
+        text = format_report(tmp_path / "wn-test.xml", data, [issue], markdown=False)
+        assert "… and 2 more" in text
+        assert "see" not in text
+
     def test_real_wordnet_file_parses(self):
         """Smoke-test: the existing wn-en.xml test fixture parses without errors."""
         path = Path(__file__).parent / "wordnets" / "wn-en.xml"
@@ -666,7 +743,24 @@ class TestIssuesFromJsonLog:
         match = next((i for i in result if "Example" in i.title), None)
         assert match is not None
         assert match.total == 2
-        assert any("bark" in item for item in match.items)
+        assert any("looked for" in item and "bark" in item for item in match.items)
+
+    def test_empty_candidate_wordforms_distinct_message(self):
+        log = {
+            "statistics": {
+                "examples": {
+                    "skipped": 1,
+                    "failed_matches": [
+                        {"text": "ai e zëvendësoi briskun.", "candidate_wordforms": []},
+                    ],
+                }
+            }
+        }
+        result = issues_from_json_log(log)
+        match = next((i for i in result if "Example" in i.title), None)
+        assert match is not None
+        assert any("no senses/wordforms found" in item for item in match.items)
+        assert not any("looked for:" in item for item in match.items)
 
     def test_zero_counts_produce_no_issues(self):
         log = {
