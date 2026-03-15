@@ -32,6 +32,7 @@ load_json_log = _mod.load_json_log
 parse_conflicts_log = _mod.parse_conflicts_log
 issues_from_json_log = _mod.issues_from_json_log
 issues_from_conflicts_log = _mod.issues_from_conflicts_log
+label_concept = _mod.label_concept
 
 
 # ---------------------------------------------------------------------------
@@ -745,3 +746,88 @@ class TestIssuesFromConflictsLog:
         assert issue.severity == "CRITICAL"
         assert issue.total == 1
         assert any("cili.i1" in item for item in issue.items)
+
+
+# ---------------------------------------------------------------------------
+# label_concept
+# ---------------------------------------------------------------------------
+
+_LABELLED_BODY = """\
+<Concept id="cili.i1" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-id" version="1.0"/>
+</Concept>
+<Gloss definiendum="cili.i1" language="id">
+  <AnnotatedSentence>hewan berkaki empat</AnnotatedSentence>
+  <Provenance resource="wn-id" version="1.0"/>
+</Gloss>
+<Lexeme id="id.NOUN.anjing" language="id" grammatical_category="NOUN">
+  <Wordform form="anjing"/>
+  <Provenance resource="wn-id" version="1.0"/>
+</Lexeme>
+<Lexeme id="en.NOUN.dog" language="en" grammatical_category="NOUN">
+  <Wordform form="dog"/>
+  <Provenance resource="wn-id" version="1.0"/>
+</Lexeme>
+<Sense id="sense.anjing" signifier="id.NOUN.anjing" signified="cili.i1">
+  <Provenance resource="wn-id" version="1.0"/>
+</Sense>
+<Sense id="sense.dog" signifier="en.NOUN.dog" signified="cili.i1">
+  <Provenance resource="wn-id" version="1.0"/>
+</Sense>
+"""
+
+
+class TestLabelConcept:
+    def _parse_id(self, tmp_path):
+        p = tmp_path / "wn-id.xml"
+        p.write_text(wn_xml("wn-id", _LABELLED_BODY, language="id"))
+        return parse_xml(p)
+
+    def test_local_and_english_label(self, tmp_path):
+        data = self._parse_id(tmp_path)
+        result = label_concept("cili.i1", data)
+        assert result == "cili.i1 [anjing/dog]"
+
+    def test_english_wordnet_shows_single_word(self, tmp_path):
+        """When the wordnet language is 'en', no slash is needed."""
+        data = _parse(tmp_path, _GOOD)  # language="en", wordform="test"
+        result = label_concept("cili.i1", data)
+        assert result == "cili.i1 [test]"
+
+    def test_unknown_concept_returns_id_unchanged(self, tmp_path):
+        data = _parse(tmp_path, _GOOD)
+        result = label_concept("cili.i999", data)
+        assert result == "cili.i999"
+
+    def test_concept_without_senses_returns_id_unchanged(self, tmp_path):
+        body = """\
+<Concept id="cili.i42" ontological_category="NOUN" status="1">
+  <Provenance resource="wn-test" version="1.0"/>
+</Concept>
+"""
+        data = _parse(tmp_path, body)
+        assert label_concept("cili.i42", data) == "cili.i42"
+
+    def test_label_used_in_unglosssed_concepts_items(self, tmp_path):
+        """check_unglosssed_concepts items include the human-readable label."""
+        p = tmp_path / "wn-id.xml"
+        p.write_text(wn_xml("wn-id", _LABELLED_BODY, language="id"))
+        data = parse_xml(p)
+        data.glossed.clear()
+        issue = check_unglosssed_concepts(data)
+        assert issue is not None
+        assert any("anjing/dog" in item for item in issue.items)
+
+    def test_label_used_in_cycle_items(self, tmp_path):
+        """Hypernym cycle items include the human-readable label."""
+        body = _LABELLED_BODY + """\
+<ConceptRelation relation_type="hypernym" source="cili.i1" target="cili.i1">
+  <Provenance resource="wn-id" version="1.0"/>
+</ConceptRelation>
+"""
+        p = tmp_path / "wn-id.xml"
+        p.write_text(wn_xml("wn-id", body, language="id"))
+        data = parse_xml(p)
+        issue = check_hypernym_cycles(data)
+        assert issue is not None
+        assert any("anjing/dog" in item for item in issue.items)

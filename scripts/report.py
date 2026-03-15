@@ -89,6 +89,12 @@ class WordnetData:
     # entry IDs that have at least one <Wordform>
     entries_with_forms: set[str] = field(default_factory=set)
 
+    # entry_id → first wordform text
+    entry_forms: dict[str, str] = field(default_factory=dict)
+
+    # concept_id → [sense_ids] (in declaration order)
+    concept_senses: dict[str, list[str]] = field(default_factory=dict)
+
     # sense_id → (signifier/entry_id, signified/concept_id)
     senses: dict[str, tuple[str, str]] = field(default_factory=dict)
 
@@ -152,8 +158,10 @@ def parse_xml(path: Path) -> WordnetData:
                 data.duplicate_entry_ids.append(eid)
             else:
                 data.entries[eid] = elem.get("language", "")
-                if elem.findall("Wordform"):
+                wf = elem.find("Wordform")
+                if wf is not None:
                     data.entries_with_forms.add(eid)
+                    data.entry_forms[eid] = wf.get("form", "")
             elem.clear()
 
         elif tag == "Sense":
@@ -161,7 +169,10 @@ def parse_xml(path: Path) -> WordnetData:
             if sid in data.senses:
                 data.duplicate_sense_ids.append(sid)
             else:
-                data.senses[sid] = (elem.get("signifier", ""), elem.get("signified", ""))
+                signifier = elem.get("signifier", "")
+                signified = elem.get("signified", "")
+                data.senses[sid] = (signifier, signified)
+                data.concept_senses.setdefault(signified, []).append(sid)
             elem.clear()
 
         elif tag == "ConceptRelation":
@@ -191,6 +202,52 @@ def parse_xml(path: Path) -> WordnetData:
             elem.clear()
 
     return data
+
+
+# ---------------------------------------------------------------------------
+# Label helper
+# ---------------------------------------------------------------------------
+
+def label_concept(concept_id: str, data: WordnetData) -> str:
+    """Return 'concept_id [local/en]' (or just 'concept_id' if no senses found).
+
+    The local word is the first wordform in the wordnet's own language; the
+    English word is the first wordform from an English sense.  If the wordnet
+    language is already English, only one word is shown.
+
+    Args:
+        concept_id: The concept identifier to label (e.g. 'cili.i1234').
+        data: Parsed wordnet data containing sense and entry information.
+
+    Returns:
+        Human-readable label string, e.g. 'cili.i1234 [anjing/dog]'.
+    """
+    wn_lang = data.language
+    local_form: str | None = None
+    en_form: str | None = None
+
+    for sid in data.concept_senses.get(concept_id, []):
+        eid, _ = data.senses[sid]
+        form = data.entry_forms.get(eid, "")
+        if not form:
+            continue
+        lang = data.entries.get(eid, "")
+        if local_form is None and lang == wn_lang:
+            local_form = form
+        if en_form is None and lang == "en":
+            en_form = form
+        if local_form is not None and en_form is not None:
+            break
+
+    if local_form and en_form and wn_lang != "en":
+        label = f"{local_form}/{en_form}"
+    elif local_form:
+        label = local_form
+    elif en_form:
+        label = en_form
+    else:
+        return concept_id
+    return f"{concept_id} [{label}]"
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +354,7 @@ def check_unglosssed_concepts(data: WordnetData) -> Issue | None:
     affected_senses = sum(concept_sense_count.values())
 
     items = [
-        f"{cid} ({data.concepts[cid]}, {concept_sense_count.get(cid, 0)} sense(s) lost)"
+        f"{label_concept(cid, data)} ({data.concepts[cid]}, {concept_sense_count.get(cid, 0)} sense(s) lost)"
         for cid in missing[:MAX_EXAMPLES]
     ]
     return Issue(
@@ -326,7 +383,10 @@ def check_hypernym_cycles(data: WordnetData) -> Issue | None:
     for cycle in cycles:
         all_cyclic.update(cycle[:-1])
 
-    items = [" → ".join(cycle) for cycle in cycles[:MAX_EXAMPLES]]
+    items = [
+        " → ".join(label_concept(node, data) for node in cycle)
+        for cycle in cycles[:MAX_EXAMPLES]
+    ]
 
     return Issue(
         severity="CRITICAL",
@@ -355,6 +415,10 @@ def check_self_loops(data: WordnetData) -> Issue | None:
     )
     if not loops:
         return None
+    items = [
+        label_concept(x, data) if x in data.concepts else x
+        for x in loops[:MAX_EXAMPLES]
+    ]
     return Issue(
         severity="WARNING",
         title="Self-referential relations",
@@ -364,7 +428,7 @@ def check_self_loops(data: WordnetData) -> Issue | None:
             "Self-loops are meaningless and will be silently skipped by Cygnet."
         ),
         recommendation="Remove any <ConceptRelation> or <SenseRelation> where source == target.",
-        items=loops[:MAX_EXAMPLES],
+        items=items,
     )
 
 
@@ -533,7 +597,7 @@ def check_glossed_concepts_without_senses(data: WordnetData) -> Issue | None:
             "If another wordnet is expected to provide senses for these concepts, "
             "this is likely fine. Otherwise, add <Sense> elements or remove the concepts."
         ),
-        items=orphan[:MAX_EXAMPLES],
+        items=[label_concept(cid, data) for cid in orphan[:MAX_EXAMPLES]],
     )
 
 
@@ -567,9 +631,9 @@ def parse_conflicts_log(resource_id: str, xml_stem: str) -> tuple[list[str], lis
     with open(CONFLICTS_LOG) as fh:
         for raw in fh:
             line = raw.rstrip()
-            if "skipped" in line and (tag_resource in line or tag_stem in line):
+            if f"skipped {tag_resource}:" in line or f"skipped {tag_stem}:" in line:
                 reversed_rels.append(line)
-            elif "Cycle removed" in line and (tag_stem in line or tag_resource in line):
+            elif f"Cycle removed {tag_stem}:" in line or f"Cycle removed {tag_resource}:" in line:
                 cycles.append(line)
 
     return reversed_rels, cycles
