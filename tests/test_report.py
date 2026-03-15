@@ -629,7 +629,6 @@ class TestRunChecks:
 
     def test_format_report_source_hint_on_overflow(self, tmp_path):
         """When items are truncated, the 'and N more' line includes the source hint."""
-        from dataclasses import replace as _replace
         data = _parse(tmp_path, _GOOD)
         # Build an issue with 12 items (> MAX_EXAMPLES=10) and a source_hint
         issue = _mod.Issue(
