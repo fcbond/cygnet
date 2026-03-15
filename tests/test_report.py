@@ -947,4 +947,3 @@ class TestLabelConcept:
         issue = check_hypernym_cycles(data)
         assert issue is not None
         assert any("anjing/dog" in item for item in issue.items)
-
