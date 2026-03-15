@@ -771,6 +771,25 @@
                 return loadedConcepts[cid] || null;
             };
 
+            // Returns { ids, isIndirect } for the best available ARASAAC pictogram(s).
+            // Priority: direct image > hypernym > eq_synonym > similar.
+            const getArasaacFallback = (concept) => {
+                const directIds = concept?.ara;
+                let fallbackIds = null;
+                if (!directIds && concept?.cr) {
+                    for (const types of [['hyp', 'ihyp'], ['eq_synonym'], ['similar']]) {
+                        for (const rel of concept.cr) {
+                            if (types.includes(rel.t)) {
+                                const related = getConceptData(rel.to.toString()) || loadConcept(rel.to.toString());
+                                if (related?.ara) { fallbackIds = related.ara; break; }
+                            }
+                        }
+                        if (fallbackIds) break;
+                    }
+                }
+                return { ids: directIds || fallbackIds, isIndirect: !directIds && !!fallbackIds };
+            };
+
             const loadSenseData = useCallback((senseId) => {
                 const sid = senseId.toString();
                 if (loadedSenses[sid]?.l) return loadedSenses[sid];
@@ -1929,20 +1948,10 @@
                                                                                                                 </div>
                                                                                                             </div>
                                                                                                             {(() => {
-                                                                                                                const directIds = concept?.ara;
-                                                                                                                let hypIds = null;
-                                                                                                                if (!directIds && concept?.cr) {
-                                                                                                                    for (const rel of concept.cr) {
-                                                                                                                        if (rel.t === 'hyp' || rel.t === 'ihyp') {
-                                                                                                                            const hypConcept = getConceptData(rel.to.toString());
-                                                                                                                            if (hypConcept?.ara) { hypIds = hypConcept.ara; break; }
-                                                                                                                        }
-                                                                                                                    }
-                                                                                                                }
-                                                                                                                const araId = (directIds || hypIds)?.[0];
+                                                                                                                const { ids, isIndirect } = getArasaacFallback(concept);
+                                                                                                                const araId = ids?.[0];
                                                                                                                 if (!araId) return null;
-                                                                                                                const isDashed = !directIds && !!hypIds;
-                                                                                                                const imgClass = `h-14 w-14 object-contain rounded bg-white flex-shrink-0 ${isDashed ? 'border-2 border-dashed border-gray-400' : 'border border-gray-200'}`;
+                                                                                                                const imgClass = `h-14 w-14 object-contain rounded bg-white flex-shrink-0 ${isIndirect ? 'border-2 border-dashed border-gray-400' : 'border border-gray-200'}`;
                                                                                                                 return (
                                                                                                                     <a href={`https://arasaac.org/en/pictograms/${araId}/`}
                                                                                                                         target="_blank" rel="noopener noreferrer"
@@ -2062,19 +2071,7 @@
                                                     })()}
                                                 </div>
                                                 {(() => {
-                                                    const directIds = concept.ara;
-                                                    // Fallback: find first hypernym with a pictogram
-                                                    let hypIds = null;
-                                                    if (!directIds && concept.cr) {
-                                                        for (const rel of concept.cr) {
-                                                            if (rel.t === 'hyp' || rel.t === 'ihyp') {
-                                                                const hypConcept = getConceptData(rel.to.toString());
-                                                                if (hypConcept?.ara) { hypIds = hypConcept.ara; break; }
-                                                            }
-                                                        }
-                                                    }
-                                                    const ids = directIds || hypIds;
-                                                    const isIndirect = !directIds && !!hypIds;
+                                                    const { ids, isIndirect } = getArasaacFallback(concept);
                                                     if (!ids) return null;
                                                     const imgClass = `h-24 w-24 object-contain rounded bg-white ${isIndirect ? 'border-2 border-dashed border-gray-400' : 'border border-gray-200'}`;
                                                     return (
