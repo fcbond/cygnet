@@ -437,12 +437,12 @@ def check_internal_reversed_relations(data: WordnetData) -> Issue | None:
     """Detect cases where this file asserts both A→B and B→A for a directed relation."""
     seen: set[tuple[str, str, str]] = set()
     conflicts: list[str] = []
-    already_reported: set[frozenset[str]] = set()
+    already_reported: set[tuple[str, frozenset[str]]] = set()
 
     for src, rel, tgt in data.concept_rels:
         if rel not in DIRECTED_RELATION_TYPES:
             continue
-        key = frozenset({src, tgt})
+        key = (rel, frozenset({src, tgt}))
         if (tgt, rel, src) in seen and key not in already_reported:
             src_lbl, tgt_lbl = label_concept(src, data), label_concept(tgt, data)
             conflicts.append(f"{src_lbl} {rel} {tgt_lbl}  ←→  {tgt_lbl} {rel} {src_lbl}")
