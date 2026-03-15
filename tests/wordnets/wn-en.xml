@@ -17,6 +17,12 @@
   <Concept id="cili.i5" ontological_category="NOUN" status="1">
     <Provenance resource="wn-en" version="1.0" original_id="n05"/>
   </Concept>
+  <Concept id="cili.i6" ontological_category="ADJ" status="1">
+    <Provenance resource="wn-en" version="1.0" original_id="a06"/>
+  </Concept>
+  <Concept id="cili.i7" ontological_category="ADJ" status="1">
+    <Provenance resource="wn-en" version="1.0" original_id="a07"/>
+  </Concept>
 
   <!-- English definitions -->
   <Gloss definiendum="cili.i1" language="en">
@@ -37,6 +43,14 @@
   </Gloss>
   <Gloss definiendum="cili.i5" language="en">
     <AnnotatedSentence>any of several small sharks</AnnotatedSentence>
+    <Provenance resource="wn-en" version="1.0"/>
+  </Gloss>
+  <Gloss definiendum="cili.i6" language="en">
+    <AnnotatedSentence>having a brilliant sheen</AnnotatedSentence>
+    <Provenance resource="wn-en" version="1.0"/>
+  </Gloss>
+  <Gloss definiendum="cili.i7" language="en">
+    <AnnotatedSentence>emitting or reflecting light steadily</AnnotatedSentence>
     <Provenance resource="wn-en" version="1.0"/>
   </Gloss>
 
@@ -61,6 +75,14 @@
     <Wordform form="dogfish"/>
     <Provenance resource="wn-en" version="1.0" original_id="dogfish-n"/>
   </Lexeme>
+  <Lexeme id="lex.en.gleaming" language="en" grammatical_category="ADJ">
+    <Wordform form="gleaming"/>
+    <Provenance resource="wn-en" version="1.0" original_id="gleaming-a"/>
+  </Lexeme>
+  <Lexeme id="lex.en.glowing" language="en" grammatical_category="ADJ">
+    <Wordform form="glowing"/>
+    <Provenance resource="wn-en" version="1.0" original_id="glowing-a"/>
+  </Lexeme>
 
   <!-- English senses (lexeme → concept) -->
   <Sense id="sense.entity" signifier="lex.en.entity" signified="cili.i1">
@@ -78,12 +100,26 @@
   <Sense id="sense.dogfish" signifier="lex.en.dogfish" signified="cili.i5">
     <Provenance resource="wn-en" version="1.0"/>
   </Sense>
+  <Sense id="sense.gleaming" signifier="lex.en.gleaming" signified="cili.i6">
+    <Provenance resource="wn-en" version="1.0"/>
+  </Sense>
+  <Sense id="sense.glowing" signifier="lex.en.glowing" signified="cili.i7">
+    <Provenance resource="wn-en" version="1.0"/>
+  </Sense>
 
   <!-- Hypernym chain: dog → animal → entity -->
   <ConceptRelation relation_type="hypernym" source="cili.i3" target="cili.i2">
     <Provenance resource="wn-en" version="1.0"/>
   </ConceptRelation>
   <ConceptRelation relation_type="hypernym" source="cili.i2" target="cili.i1">
+    <Provenance resource="wn-en" version="1.0"/>
+  </ConceptRelation>
+  <!-- eq_synonym fallback: gleaming (i6) ↔ dog (i3, has ARASAAC), no hypernym -->
+  <ConceptRelation relation_type="eq_synonym" source="cili.i6" target="cili.i3">
+    <Provenance resource="wn-en" version="1.0"/>
+  </ConceptRelation>
+  <!-- similar fallback: glowing (i7) ~ dog (i3, has ARASAAC), no hypernym, no eq_synonym -->
+  <ConceptRelation relation_type="similar" source="cili.i7" target="cili.i3">
     <Provenance resource="wn-en" version="1.0"/>
   </ConceptRelation>
 

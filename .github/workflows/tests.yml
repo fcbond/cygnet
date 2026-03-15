@@ -17,18 +17,13 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get install -y libxml2-dev libxslt-dev
 
-      - name: Cache downloaded wordnet data
-        uses: actions/cache@v4
-        with:
-          path: bin/
-          key: wordnet-data-${{ hashFiles('build.sh') }}
-          restore-keys: wordnet-data-
+      - name: Install dependencies
+        run: uv sync
 
-      - name: Download wordnet data
-        run: bash build.sh --download-only
-
-      - name: Build databases
-        run: bash build.sh --build-only --skip-tests
+      - name: Download NLP models
+        run: |
+          uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+          uv run python -c "import nltk; nltk.download('wordnet', quiet=True)"
 
       - name: Install Playwright browsers
         run: uv run playwright install chromium --with-deps

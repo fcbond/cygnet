@@ -446,6 +446,32 @@ class TestArasaac:
         classes = img.get_attribute('class') or ''
         assert 'border-dashed' in classes
 
+    def test_eq_synonym_fallback_image_has_dashed_border(self, page_ready: Page):
+        """Gleaming has no direct pictogram but eq_synonymous dog does.
+
+        The fallback image should be visible in the concept view with a dashed border.
+        """
+        _search(page_ready, 'gleaming')
+        page_ready.locator('.concept-inner').first.click()
+        page_ready.wait_for_selector(_CONCEPT_LOADED, timeout=10_000)
+        img = page_ready.locator('img[src*="arasaac.org"]').first
+        expect(img).to_be_visible()
+        classes = img.get_attribute('class') or ''
+        assert 'border-dashed' in classes
+
+    def test_similar_fallback_image_has_dashed_border(self, page_ready: Page):
+        """Glowing has no direct pictogram but similar dog does.
+
+        The fallback image should be visible in the concept view with a dashed border.
+        """
+        _search(page_ready, 'glowing')
+        page_ready.locator('.concept-inner').first.click()
+        page_ready.wait_for_selector(_CONCEPT_LOADED, timeout=10_000)
+        img = page_ready.locator('img[src*="arasaac.org"]').first
+        expect(img).to_be_visible()
+        classes = img.get_attribute('class') or ''
+        assert 'border-dashed' in classes
+
     def test_about_tab_mentions_arasaac(self, page_ready: Page):
         """The About tab contains an ARASAAC attribution link."""
         page_ready.locator('button', has_text='About').click()
@@ -676,3 +702,35 @@ class TestArasaacInSearch:
         _search(page_ready, 'brightness')
         page_ready.wait_for_selector('.concept-inner', timeout=_SEARCH_TIMEOUT)
         expect(page_ready.locator('img[src*="arasaac.org"]')).to_have_count(0)
+
+    def test_hypernym_fallback_image_shown_in_search_results(self, page_ready: Page):
+        """Search results for 'animal' (no direct image, but hypernym entity has one)
+        show a dashed-border ARASAAC pictogram without requiring a click-through."""
+        _search(page_ready, 'animal')
+        page_ready.wait_for_selector('img[src*="arasaac.org"]', timeout=10_000)
+        img = page_ready.locator('img[src*="arasaac.org"]').first
+        expect(img).to_be_visible()
+        classes = img.get_attribute('class') or ''
+        assert 'border-dashed' in classes, (
+            "Hypernym-fallback image in search results should have a dashed border"
+        )
+
+    def test_eq_synonym_fallback_image_shown_in_search_results(self, page_ready: Page):
+        """Search results for 'gleaming' (no direct image, eq_synonym dog has one)
+        show a dashed-border ARASAAC pictogram without requiring a click-through."""
+        _search(page_ready, 'gleaming')
+        page_ready.wait_for_selector('img[src*="arasaac.org"]', timeout=10_000)
+        img = page_ready.locator('img[src*="arasaac.org"]').first
+        expect(img).to_be_visible()
+        classes = img.get_attribute('class') or ''
+        assert 'border-dashed' in classes
+
+    def test_similar_fallback_image_shown_in_search_results(self, page_ready: Page):
+        """Search results for 'glowing' (no direct image, similar dog has one)
+        show a dashed-border ARASAAC pictogram without requiring a click-through."""
+        _search(page_ready, 'glowing')
+        page_ready.wait_for_selector('img[src*="arasaac.org"]', timeout=10_000)
+        img = page_ready.locator('img[src*="arasaac.org"]').first
+        expect(img).to_be_visible()
+        classes = img.get_attribute('class') or ''
+        assert 'border-dashed' in classes
