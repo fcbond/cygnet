@@ -763,13 +763,14 @@ class TestSenseRelations:
             page_ready.locator('span.italic', has_text='opposite')
         ).to_be_visible(timeout=_TEXT_VIEW_TIMEOUT)
 
-    def test_concept_text_view_shows_from_lemma(self, page_ready: Page):
-        """Gleaming concept text view shows the source lemma 'gleaming' in the sense rel."""
+    def test_concept_text_view_shows_subheader_and_target(self, page_ready: Page):
+        """Gleaming concept text view has 'Related through senses' header and shows target."""
         _open_concept_text_view(page_ready, 'gleaming')
         page_ready.wait_for_selector('span.italic:has-text("opposite")', timeout=_TEXT_VIEW_TIMEOUT)
+        expect(
+            page_ready.locator('text=Related through senses')
+        ).to_be_visible(timeout=_TEXT_VIEW_TIMEOUT)
         content = page_ready.content()
-        # Both the from-lemma and the target lemma should appear in the page
-        assert 'gleaming' in content
         assert 'glowing' in content
 
     def test_concept_text_view_antonym_link_navigates(self, page_ready: Page):
