@@ -111,8 +111,7 @@ sk = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sk-2.0.tar.xz
 
 # Slovenian — OMW Slovenian
 sl = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sl-2.0.tar.xz"]
-
-# Albanian — OMW Albania n
+# Albanian — OMW Albanian
 sq = ["https://github.com/omwn/omw-data/releases/download/v2.0/omw-sq-2.0.tar.xz"]
 
 # Swedish — OMW Swedish
