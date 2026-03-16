@@ -804,7 +804,7 @@
                 const directIds = concept?.ara;
                 let fallbackIds = null;
                 if (!directIds && concept?.cr) {
-                    for (const types of [['hyp', 'ihyp'], ['eq_synonym'], ['similar']]) {
+                    for (const types of [['hyp', 'ihyp'], ['eqs'], ['sim']]) {
                         for (const rel of concept.cr) {
                             if (types.includes(rel.t)) {
                                 const related = getConceptData(rel.to.toString()) || loadConcept(rel.to.toString());
