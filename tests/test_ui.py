@@ -740,7 +740,6 @@ class TestArasaacInSearch:
 # Sense relations
 # ---------------------------------------------------------------------------
 
-_CONCEPT_LOADED = 'text=All forms expressing this concept'
 _TEXT_VIEW_TIMEOUT = 8_000
 
 

@@ -82,13 +82,17 @@ def fmt(n: int) -> str:
     return f"{n:,}" if n else "–"
 
 
-def print_summary(logs: dict[str, dict], top_n: int) -> None:
+def print_summary(logs: dict[str, dict], top_n: int, log_dir: Path) -> None:
     if not logs:
         print("No log files found.")
         return
 
     n_total = len(logs)
-    print(f"Loaded {n_total} log file(s) from {PRESYNTH_DIR.relative_to(PROJECT_ROOT)}\n")
+    try:
+        display_dir = log_dir.relative_to(PROJECT_ROOT)
+    except ValueError:
+        display_dir = log_dir
+    print(f"Loaded {n_total} log file(s) from {display_dir}\n")
 
     # Compute totals and per-wordnet values for each metric
     current_section = ""
@@ -155,7 +159,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logs = load_logs(args.log_dir)
-    print_summary(logs, args.top)
+    print_summary(logs, args.top, args.log_dir)
 
 
 if __name__ == "__main__":

@@ -582,7 +582,7 @@
                 localStorage.getItem('definitionLanguage') || 'en'
             );
             const [relatedConcepts, setRelatedConcepts] = useState({});
-            const [expandedRelGroups, setExpandedRelGroups] = useState(new Set());
+            const [expandedRelGroups, setExpandedRelGroups] = useState(() => new Set());
             const [visibleNodes, setVisibleNodes] = useState(new Set());
             const [hoveredNode, setHoveredNode] = useState(null);
             const [hoverMenuPosition, setHoverMenuPosition] = useState(null);
